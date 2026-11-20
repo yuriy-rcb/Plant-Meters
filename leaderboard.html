@@ -369,7 +369,7 @@
     document.body.classList.toggle("manygold", MANY_GOLD);
     var leader = active[0], last = active.length > 1 ? active[active.length - 1] : null, middle = active.length > 2 ? active.slice(1, -1) : [];
     var onClock = P.filter(function (p) { return p.t[h] === 1; }).length;
-    var ops = active.concat(sleeping).filter(function (s) { return s.p.f !== "Indirect" && s.p.f !== "Maintenance"; });
+    var ops = active.concat(sleeping).filter(function (s) { return s.p.f !== "Indirect" && s.p.f !== "Maintenance" && String(s.p.d || "").indexOf("last shift") !== 0; });
     var tm = ops.reduce(function (a, s) { return a + s.prod; }, 0), tx = ops.reduce(function (a, s) { return a + s.exp; }, 0);
 
     document.getElementById("title").textContent = M.title || "Efficiency Leaderboard";
