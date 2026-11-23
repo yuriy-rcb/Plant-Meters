@@ -59,6 +59,13 @@
   /* tiles */
   .tile { position: relative; overflow: hidden; border-radius: 8px; padding: 6px 8px; border: 1px solid var(--border); background: var(--card); }
   .tile.asleep { background: var(--subtle); filter: grayscale(1); opacity: .55; }
+  /* 100% Club stays gold after clock-out: no grayscale, full treatment, calm 'Shift done' cue */
+  .tile.gold-done { background: var(--card); filter: none; opacity: 1; padding-bottom: 10px; }
+  .tile.gold-done .mrow { margin-bottom: 10px; } /* keep sparkles off the 'Shift done' line */
+  .tile.gold-done .am { color: #8a6a1a; font-weight: 650; }
+  @media (prefers-color-scheme: dark) {
+    .tile.gold-done .am { color: #e0b84a; }
+  }
   .tile .top { display: flex; gap: 6px; align-items: baseline; font-size: .82rem; }
   .tile .rk { color: var(--faint); width: 20px; }
   .tile .nm { font-weight: 650; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -87,7 +94,7 @@
   .fx { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
   .fx span { position: absolute; }
 
-  /* GOLD: over 100% of livable max (look from gold/demo.html) */
+  /* GOLD: 100% or more of livable max (look from gold/demo.html) */
   .meter .fill.gold { background: linear-gradient(100deg,#7a5a12 0%,#c99a2e 18%,#ffe9a3 32%,#d4a017 46%,#fff6c8 58%,#b8860b 74%,#ffd75e 90%,#8a6514 100%) !important;
     background-size: 200% 100% !important; animation: sheen 3.2s linear infinite;
     box-shadow: 0 0 18px 4px rgba(255,200,60,.55), 0 0 42px 10px rgba(255,180,0,.25), inset 0 2px 0 rgba(255,255,255,.6), inset 0 -3px 6px rgba(90,60,0,.5);
@@ -251,7 +258,7 @@
   function amt(s) { return n0(s.prod) + " / " + n0(s.exp); }
   function extra(s) { return [s.p.f, s.unl ? "backfilled " + s.unl + " min" : "", s.co ? "downtime credit " + s.co + " min" : ""].filter(Boolean).join(" \u00b7 "); }
   var MANY_GOLD = false;
-  function isGold(s, dim) { return !dim && s.pct > 100; }
+  function isGold(s, dim) { return s.pct >= 100; } /* off-clock included; dim no longer suppresses gold */
   function meter(s, h, dim) {
     var inset = h > 12 ? 3 : 1, gold = isGold(s, dim);
     var col = dim ? "var(--other)" : (s.pct < 80 ? "var(--neg)" : "var(--blue)");
@@ -344,13 +351,20 @@
       '<div class="num"><div class="big' + (isGold(s, false) ? " goldpct" : "") + '">' + s.pct.toFixed(1) + '%</div><div class="amt">' + amt(s) + "</div></div></div>";
   }
   function tile(s, rank, asleep) {
-    var z = asleep ? '<span class="zzz">' + ["Z", "z", "z"].map(function (c, k) { return '<span style="right:' + (4 + k * 10) + "px;font-size:" + (18 - k * 4) + "px;animation-delay:" + k + 's">' + c + "</span>"; }).join("") + "</span>" : "";
     var g = isGold(s, asleep);
-    return '<div class="tile' + (asleep ? " asleep" : "") + (g ? " goldtile" : "") + '">' + z +
-      '<div class="top"><span class="rk">' + rank + '</span><span class="nm">' + esc(s.p.n) + "</span>" + (asleep ? "" : '<span class="pc">' + s.pct.toFixed(0) + "%</span>") + "</div>" +
+    var goldOff = asleep && g;
+    var z = (asleep && !g) ? '<span class="zzz">' + ["Z", "z", "z"].map(function (c, k) { return '<span style="right:' + (4 + k * 10) + "px;font-size:" + (18 - k * 4) + "px;animation-delay:" + k + 's">' + c + "</span>"; }).join("") + "</span>" : "";
+    var nm = (goldOff ? '<span class="crown">\uD83D\uDC51</span>' : "") + esc(s.p.n);
+    var showPct = !asleep || goldOff;
+    var pc = showPct ? '<span class="pc' + (goldOff ? " goldpct" : "") + '">' + (goldOff ? s.pct.toFixed(1) : s.pct.toFixed(0)) + "%</span>" : "";
+    var cap = goldOff ? "Shift done \u2713 \u00b7 " + amt(s)
+      : (asleep ? "Off the clock \u00b7 last " + s.pct.toFixed(0) + "% \u00b7 " + amt(s)
+      : amt(s) + (s.unl ? " \u00b7 backfilled " + s.unl + "m" : ""));
+    return '<div class="tile' + (asleep && !g ? " asleep" : "") + (g ? " goldtile" : "") + (goldOff ? " gold-done" : "") + '">' + z +
+      '<div class="top"><span class="rk">' + rank + '</span><span class="nm' + (goldOff ? " goldname" : "") + '">' + nm + "</span>" + pc + "</div>" +
       '<div class="dp">' + esc(s.p.d) + (s.p.f && s.p.d.indexOf(s.p.f) !== 0 ? " \u00b7 " + esc(s.p.f) : "") + "</div>" +
-      '<div class="mrow">' + meter(s, g ? 14 : 8, asleep) + "</div>" +
-      '<div class="am">' + (asleep ? "Off the clock \u00b7 last " + s.pct.toFixed(0) + "% \u00b7 " + amt(s) : amt(s) + (s.unl ? " \u00b7 backfilled " + s.unl + "m" : "")) + "</div></div>";
+      '<div class="mrow">' + meter(s, g ? 14 : 8, asleep && !g) + "</div>" +
+      '<div class="am">' + cap + "</div></div>";
   }
 
   function render() {
@@ -365,7 +379,7 @@
     var final = false;
     if (!active.length) { active = sleeping; sleeping = []; final = true; }
     var waiting = pool.filter(function (p) { return !(p.x[h] > 0); });
-    MANY_GOLD = active.filter(function (s) { return s.pct > 100; }).length > 4;
+    MANY_GOLD = active.filter(function (s) { return s.pct >= 100; }).length > 4;
     document.body.classList.toggle("manygold", MANY_GOLD);
     var leader = active[0], last = active.length > 1 ? active[active.length - 1] : null, middle = active.length > 2 ? active.slice(1, -1) : [];
     var onClock = P.filter(function (p) { return p.t[h] === 1; }).length;
@@ -375,7 +389,7 @@
     document.getElementById("title").textContent = M.title || "Efficiency Leaderboard";
     document.title = (M.title || "Efficiency Leaderboard") + " \u00b7 RCB";
     document.getElementById("asof").textContent = "As of " + (h === T.length - 1 ? (M.asof_label || T[h]) : T[h].replace(" (now)", "") + " ET");
-    document.getElementById("sub").textContent = (M.date_label || "") + " \u00b7 clocked-in people ranked live \u00b7 off the clock grayed out and asleep";
+    document.getElementById("sub").textContent = (M.date_label || "") + " \u00b7 clocked-in people ranked live \u00b7 off the clock grayed out, except 100% Club stays gold";
     document.getElementById("hrlab").textContent = T[h];
     document.getElementById("slider").value = h;
     document.getElementById("live").className = followLatest ? "on" : "";
@@ -388,7 +402,7 @@
     if (leader) html += hero(leader, "top", 1, final);
     if (middle.length) html += '<div class="grid">' + middle.map(function (s, i) { return tile(s, i + 2, false); }).join("") + "</div>";
     if (last) html += hero(last, "bottom", active.length, final);
-    if (sleeping.length) html += '<div class="label">Off the clock (grayed out, asleep): last reported efficiency, not in the live ranking</div><div class="grid">' +
+    if (sleeping.length) html += '<div class="label" id="sleep-label">Off the clock (not in the live ranking): last reported efficiency \u00b7 100% Club stays gold</div><div class="grid" id="sleep-grid">' +
       sleeping.map(function (s, i) { return tile(s, active.length + i + 1, true); }).join("") + "</div>";
     if (waiting.length) html += '<div class="wait">Not scored yet: ' + waiting.map(function (p) { return esc(p.f === "Indirect" ? p.n + " (" + p.d + ")" : p.n); }).join(" \u00b7 ") + "</div>";
     if (!leader && !html) html = '<div class="wait">Nobody clocked in yet at this hour.</div>';
